@@ -1,0 +1,111 @@
+##############################
+# macOS
+##############################
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Icon must end with two \r
+Icon
+
+# Thumbnails
+._*
+
+# Files that might appear on external disk
+.Spotlight-V100
+.Trashes
+
+# macOS specific
+*.swp
+*.lock
+
+
+##############################
+# Swift Package Manager
+##############################
+.build/
+.swiftpm/
+Packages/
+Package.resolved
+
+
+##############################
+# Xcode
+##############################
+## Build generated
+build/
+DerivedData/
+
+## Various settings and user data
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+## Workspace & scheme metadata
+*.xcworkspace/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+## Device support
+Devices/
+
+## Intermediate build files
+*.xcuserstate
+
+
+##############################
+# Swift / iOS / macOS
+##############################
+*.dSYM
+*.ipa
+*.xcarchive
+
+
+##############################
+# Swift Playgrounds
+##############################
+timeline.xctimeline
+playground.xcworkspace
+
+
+##############################
+# Fastlane
+##############################
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+
+##############################
+# CocoaPods
+##############################
+Pods/
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+!default.mode1v3
+!default.mode2v3
+!default.perspectivev3
+
+
+##############################
+# Carthage
+##############################
+Carthage/Build/
+
+
+##############################
+# SwiftLint / tools
+##############################
+.swiftlint.yml
+
+
+##############################
+# General
+##############################
+*.orig
+*.rej
+*.tmp
+*.log
+
