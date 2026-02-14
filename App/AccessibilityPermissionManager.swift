@@ -22,11 +22,14 @@ class AccessibilityPermissionManager: ObservableObject {
     private init() {
         // Check immediately on initialization
         checkAccessibilityPermission()
+        // Start continuous monitoring to detect permission revocation
+        startContinuousMonitoring()
     }
     
     /// Check current accessibility permission status
     @discardableResult
     func checkAccessibilityPermission() -> Bool {
+        let previousStatus = isAccessibilityGranted
         let trusted = AXIsProcessTrusted()
         checkCount += 1
         
@@ -35,41 +38,33 @@ class AccessibilityPermissionManager: ObservableObject {
         
         isAccessibilityGranted = trusted
         
-        if trusted {
-            stopPeriodicChecks()
+        // Handle permission state changes
+        if trusted && !previousStatus {
+            // Permission just granted
+            FlipioApp.logger.info("Accessibility permission granted - starting EventMonitor")
             EventMonitor.shared.start()
+        } else if !trusted && previousStatus {
+            // Permission just revoked - CRITICAL: stop monitoring immediately to prevent system hang
+            FlipioApp.logger.warning("Accessibility permission REVOKED - stopping EventMonitor immediately")
+            EventMonitor.shared.stop()
         }
         
         return trusted
     }
     
-    /// Start periodic checks (useful when waiting for user to grant permission)
-    func startPeriodicChecks() {
-        // Don't start if already granted
-        guard !isAccessibilityGranted else {
-            FlipioApp.logger.info("Accessibility permission already granted; periodic checks not started")
-            return
-        }
-        
+    /// Start continuous monitoring that runs forever to detect permission changes
+    private func startContinuousMonitoring() {
         // Avoid multiple timers
         guard timer == nil else { return }
         
-        // Check every 3 seconds
+        // Check every 3 seconds continuously
         timer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.checkAccessibilityPermission()
             }
         }
         
-        FlipioApp.logger.info("Started periodic accessibility permission checks (every 3 seconds)")
+        FlipioApp.logger.info("Started continuous accessibility permission monitoring (every 3 seconds)")
     }
-    
-    /// Stop periodic checks
-    func stopPeriodicChecks() {
-        guard timer != nil else { return }
-        
-        timer?.invalidate()
-        timer = nil
-        FlipioApp.logger.info("Stopped periodic accessibility permission checks")
-    }
+
 }

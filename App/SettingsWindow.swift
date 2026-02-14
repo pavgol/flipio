@@ -24,16 +24,6 @@ struct SettingsWindow: View {
                 permissionGrantedView
             }
         }
-        .onAppear {
-            // Start periodic checks if permission not yet granted
-            if !permissionManager.isAccessibilityGranted {
-                permissionManager.startPeriodicChecks()
-            }
-        }
-        .onDisappear {
-            // Stop periodic checks when window closes
-            permissionManager.stopPeriodicChecks()
-        }
     }
     
     private var permissionGrantedView: some View {
