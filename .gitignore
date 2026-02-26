@@ -109,3 +109,4 @@ Carthage/Build/
 *.tmp
 *.log
 
+assets.bak/
