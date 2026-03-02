@@ -278,12 +278,37 @@ final class TextConversionService: @unchecked Sendable {
     
     // MARK: - Synthetic key events
     
+    /// Checks if Spotlight search is currently active by examining the window list.
+    private func isSpotlightActive() -> Bool {
+        guard let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
+            return false
+        }
+        
+        // Look for Spotlight window in the window list
+        for window in windowList {
+            if let ownerName = window[kCGWindowOwnerName as String] as? String,
+               ownerName == "Spotlight" {
+                FlipioApp.logger.debug("isSpotlightActive: Spotlight window detected")
+                return true
+            }
+        }
+        
+        return false
+    }
+    
     /// Deletes typed text using the appropriate strategy for the current app.
     /// - simulateBackspaceViaSelection: for OneNote and apps where regular backspace doesn't work
     /// - simulateBackspace_v2: for Spotlight Search and apps that need Control+Backspace
     /// - simulateBackspace: default for most apps
     private func deleteTypedText(count: Int) {
         guard count > 0 else { return }
+        
+        // Check for Spotlight first (it's not a traditional app)
+        if isSpotlightActive() {
+            FlipioApp.logger.debug("deleteTypedText: using Control+Backspace for Spotlight")
+            simulateBackspace_v2(count: count)
+            return
+        }
         
         guard let frontApp = NSWorkspace.shared.frontmostApplication,
               let bundleId = frontApp.bundleIdentifier else {
@@ -299,9 +324,8 @@ final class TextConversionService: @unchecked Sendable {
         ]
         
         // Apps that need Control+Backspace strategy
-        let needsControlBackspace = [
-            "com.apple.Spotlight"  // macOS Spotlight Search
-            // Add more bundle identifiers here as needed
+        let needsControlBackspace: [String] = [
+            // Add bundle identifiers here as needed
         ]
         
         // Check for apps needing select-and-delete
