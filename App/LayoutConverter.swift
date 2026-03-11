@@ -38,20 +38,13 @@ struct LayoutConverter: Sendable {
         }
         
         let conversion = selection.pair.convertMixedWithTarget(text)
-        return ConversionResult(
-            text: conversion.text,
-            targetLayout: conversion.targetLayout,
-            selection: selection
-        )
+        return conversion
     }
     
     /// Converts text to the next layout in the cycle (for live typing).
     /// Cycles through all available layouts: A->B->C->A...
     /// Returns the conversion result with the target layout ID.
-    func convertToNextLayout(_ text: String) -> NextLayoutConversionResult? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        
+    func convertToNextLayout(_ text: String) -> ConversionResult? {
         guard let nextLayout = layoutProvider.nextLayoutInfo() else {
             return nil
         }
@@ -62,16 +55,16 @@ struct LayoutConverter: Sendable {
         }
         
         let mapping = KeyboardLayoutPairBuilder.buildOneWayMapping(
-            from: currentLayout.source,
-            to: nextLayout.source
+            from: currentLayout,
+            to: nextLayout
         )
         
         // Convert text using the mapping
         let convertedText = convertUsingMapping(text, mapping: mapping)
         
-        return NextLayoutConversionResult(
+        return ConversionResult(
             text: convertedText,
-            targetLayoutID: nextLayout.id
+            targetLayout: nextLayout
         )
     }
     
@@ -103,15 +96,8 @@ struct LayoutConverter: Sendable {
     }
 
     /// Switches the system input source to the target layout from the conversion result.
-    func applyTargetLayout(_ result: ConversionResult?) {
-        guard let result else { return }
-        layoutProvider.activateLayout(result.targetLayout, selection: result.selection)
-    }
-    
-    /// Switches to the next layout by ID.
-    func applyNextLayout(_ result: NextLayoutConversionResult?) {
-        guard let result else { return }
-        layoutProvider.activateLayoutByID(result.targetLayoutID)
+    func applyTargetLayout(_ result: KeyboardInputSourceInfo) {
+        layoutProvider.activateLayoutByID(result)
     }
 }
 
@@ -135,25 +121,9 @@ struct LayoutProvider: Sendable {
         let currentID = inputSourceProvider.currentSourceID()
         return inputSourceProvider.selectNextLayout(after: currentID)
     }
-
-    /// Activates the specified layout side as the system input source.
-    func activateLayout(_ target: KeyboardLayoutSide?, selection: KeyboardLayoutSelection) {
-        guard let target else { return }
-        
-        let sourceID: String?
-        switch target {
-        case .layoutA:
-            sourceID = selection.sourceAID
-        case .layoutB:
-            sourceID = selection.sourceBID
-        }
-        
-        guard let sourceID else { return }
-        inputSourceProvider.activateInputSource(id: sourceID)
-    }
     
     /// Activates the layout by its source ID.
-    func activateLayoutByID(_ sourceID: String) {
-        inputSourceProvider.activateInputSource(id: sourceID)
+    func activateLayoutByID(_ source: KeyboardInputSourceInfo) {
+        inputSourceProvider.activateInputSource(id: source)
     }
 }

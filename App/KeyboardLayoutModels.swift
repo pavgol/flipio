@@ -16,8 +16,8 @@ enum KeyboardLayoutSide {
 /// A pair of keyboard layouts with bidirectional character mapping.
 struct KeyboardLayoutPair: Sendable {
     let id: String
-    let nameA: String
-    let nameB: String
+    let nameA: KeyboardInputSourceInfo
+    let nameB: KeyboardInputSourceInfo
     /// Map: character in layout A → character in layout B (lowercase).
     let aToB: [Character: Character]
     /// Map: character in layout B → character in layout A (lowercase).
@@ -39,26 +39,32 @@ struct KeyboardLayoutPair: Sendable {
     }
 
     /// Convert text that may contain a mix of both layouts and report the last target layout.
-    func convertMixedWithTarget(_ text: String) -> (text: String, targetLayout: KeyboardLayoutSide?) {
-        guard !text.isEmpty else { return (text, nil) }
+    func convertMixedWithTarget(_ text: String) -> ConversionResult {
         var result = ""
         result.reserveCapacity(text.count)
-        var lastTarget: KeyboardLayoutSide?
+        var lastTarget: KeyboardInputSourceInfo = nameB
 
         for char in text {
             if let mapped = mapPreservingCase(char, map: aToB) {
                 result.append(mapped)
-                lastTarget = .layoutB
+                // Only count this as a direction signal when the character actually changed.
+                // Digits and other layout-neutral characters map to themselves in both aToB and
+                // bToA; letting them update lastTarget would flip the target to the wrong side.
+                if mapped != char {
+                    lastTarget = nameB
+                }
                 continue
             }
             if let mapped = mapPreservingCase(char, map: bToA) {
                 result.append(mapped)
-                lastTarget = .layoutA
+                if mapped != char {
+                    lastTarget = nameA
+                }
                 continue
             }
             result.append(char)
         }
-        return (result, lastTarget)
+        return ConversionResult(text: result, targetLayout: lastTarget)
     }
 
     private func convert(_ text: String, map: [Character: Character]) -> String {
@@ -103,12 +109,5 @@ struct KeyboardLayoutSelection: Sendable {
 /// Result of a text conversion operation.
 struct ConversionResult: Sendable {
     let text: String
-    let targetLayout: KeyboardLayoutSide?
-    let selection: KeyboardLayoutSelection
-}
-
-/// Result of a next layout conversion (for cycling through layouts).
-struct NextLayoutConversionResult: Sendable {
-    let text: String
-    let targetLayoutID: String
+    let targetLayout: KeyboardInputSourceInfo
 }

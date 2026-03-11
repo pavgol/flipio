@@ -2,17 +2,20 @@
 //  SystemInputSourceProvider.swift
 //  Flipio
 //
-//  System input source detection and keyboard layout pair building.
+//  System input source detection, keyboard layout pair building,
+//  and input source switching (with system HUD support).
 //
 
-import Foundation
 import Carbon.HIToolbox
+import CoreGraphics
+import Foundation
 import os
 
 /// Information about a keyboard input source.
 struct KeyboardInputSourceInfo {
     let id: String
     let name: String
+    let primaryLanguage: String
     let source: TISInputSource
 }
 
@@ -21,24 +24,7 @@ struct SystemInputSourceProvider {
     
     /// Returns all selectable keyboard input sources with Unicode key layouts.
     func selectableSources() -> [KeyboardInputSourceInfo] {
-        let options: [String: Any] = [
-            kTISPropertyInputSourceCategory as String: kTISCategoryKeyboardInputSource as String,
-            kTISPropertyInputSourceIsSelectCapable as String: true
-        ]
-
-        guard let list = TISCreateInputSourceList(options as CFDictionary, false)?.takeRetainedValue() else {
-            return []
-        }
-
-        let sources = (list as NSArray).map { $0 as! TISInputSource }.compactMap { source -> KeyboardInputSourceInfo? in
-            guard hasUnicodeKeyLayout(source) else { return nil }
-
-            let id = getStringProperty(source, key: kTISPropertyInputSourceID) ?? "unknown"
-            let name = getStringProperty(source, key: kTISPropertyLocalizedName) ?? id
-
-            return KeyboardInputSourceInfo(id: id, name: name, source: source)
-        }
-        return sources
+        allSources().compactMap { makeSourceInfo(from: $0) }
     }
 
     /// Returns the ID of the currently active keyboard input source.
@@ -48,40 +34,27 @@ struct SystemInputSourceProvider {
         }
         return getStringProperty(current, key: kTISPropertyInputSourceID)
     }
-
-    /// Selects a primary and secondary keyboard input source for layout conversion.
-    /// Returns nil if fewer than 2 sources are available.
-    func selectPair() -> (primary: KeyboardInputSourceInfo, secondary: KeyboardInputSourceInfo)? {
-        let sources = selectableSources()
-        guard sources.count >= 2 else { return nil }
-
-        let currentID = currentSourceID()
-        let primary = sources.first { $0.id == currentID } ?? sources[0]
-        let secondary = sources.first { $0.id != primary.id } ?? sources[1]
-        return (primary: primary, secondary: secondary)
-    }
     
     /// Returns a preferred pair of layouts based on system preferred languages.
     /// Uses the first two input sources that match the system's preferred languages.
     /// Falls back to the first two selectable sources if no language match is found.
     func selectPreferredPair() -> (primary: KeyboardInputSourceInfo, secondary: KeyboardInputSourceInfo)? {
         let sources = selectableSources()
-        guard sources.count >= 2 else { return nil }
+        guard let fallbackPair = firstDistinctPair(in: sources) else { return nil }
         
         // Get system preferred languages
         let preferredLanguages = Locale.preferredLanguages
         guard preferredLanguages.count >= 2 else {
-            // Fall back to first two sources
-            return (primary: sources[0], secondary: sources[1])
+            return fallbackPair
         }
         
         // Try to match sources with preferred languages
         var matchedSources: [KeyboardInputSourceInfo] = []
         for language in preferredLanguages.prefix(2) {
-            let languageCode = String(language.prefix(2)) // e.g., "en" from "en-US"
-            if let source = sources.first(where: { source in
-                source.id.lowercased().contains(languageCode.lowercased()) && 
-                !matchedSources.contains(where: { $0.id == source.id })
+            let languageCode = preferredLanguageCode(from: language)
+            if let source = sources.first(where: { candidate in
+                matchesLanguageCode(languageCode, source: candidate)
+                    && !matchedSources.contains(where: { $0.id == candidate.id })
             }) {
                 matchedSources.append(source)
             }
@@ -92,62 +65,242 @@ struct SystemInputSourceProvider {
             return (primary: matchedSources[0], secondary: matchedSources[1])
         }
         
-        // Fall back to first two sources
-        return (primary: sources[0], secondary: sources[1])
+        return fallbackPair
     }
     
     /// Returns the next layout in the cycle for live typing conversion.
     /// Cycles through all available layouts: A->B->C->A...
     func selectNextLayout(after currentID: String?) -> KeyboardInputSourceInfo? {
         let sources = selectableSources()
-        guard !sources.isEmpty else { return nil }
-        
-        // If no current ID, return first source
-        guard let currentID = currentID else {
-            return sources.first
-        }
-        
-        // Find current source index
-        if let currentIndex = sources.firstIndex(where: { $0.id == currentID }) {
-            // Return next source, wrapping around to start
-            let nextIndex = (currentIndex + 1) % sources.count
-            return sources[nextIndex]
-        }
-        
-        // If current source not found, return first source
-        return sources.first
+        return nextSource(after: currentID, in: sources)
     }
     
     /// Activates the input source with the given ID.
-    func activateInputSource(id: String) {
-        let options: [String: Any] = [kTISPropertyInputSourceID as String: id]
-        guard let list = TISCreateInputSourceList(options as CFDictionary, false)?.takeRetainedValue() else {
-            FlipioApp.logger.warning("Failed to find input source with id '\(id, privacy: .public)'")
+    /// Prefers the system-hotkey path (which shows the HUD) via `switchToNext()`, cycling
+    /// up to `selectableSources().count` times until the desired source becomes current.
+    /// Falls back to direct TISSelectInputSource if the hotkey never reaches the target.
+    func activateInputSource(id target: KeyboardInputSourceInfo) {
+        FlipioApp.logger.debug("activateInputSource: activating '\(target.id)'")
+        // No-op if already current.
+        if currentSourceID() == target.id {
+            FlipioApp.logger.debug("activateInputSource: '\(target.id)' is already active")
             return
         }
-        guard let first = (list as NSArray).firstObject else {
-            FlipioApp.logger.warning("Input source list empty for id '\(id, privacy: .public)'")
+        //TODO: now two system layouts are supported only.
+        //it is a challenge to get the current system layout after switch done via hotkey
+        //hotkey switch is preferred because it shows the HUD and when user returns back to the edit area then 
+        //the layout is restored
+                switchToNextInputSource()
+    }
+
+    // MARK: - Cycling switch with system HUD
+
+    // Symbolic hotkey IDs for input source switching (com.apple.symbolichotkeys):
+    //   60 = "Select the previous input source"  (default: ⌃Space)
+    //   61 = "Select next source in Input menu"  (default: ⌃⌥Space)
+    // macOS versions differ on which ID gets ⌃Space; we try both.
+    private static let hotkeyIDs = [60, 61]
+    private static var lastSelectedIndex: Int?
+
+    /// Switches to the next input source in the list.
+    /// Prefers simulating the system shortcut (hotkey IDs 60/61) so the window server
+    /// shows the layout-change HUD. Falls back to direct TISSelectInputSource when the
+    /// shortcut cannot be read (e.g. sandbox blocks cfprefsd cross-app prefs access).
+    func switchToNextInputSource() {
+        for id in Self.hotkeyIDs {
+            if let params = Self.readSystemHotkey(id: id) {
+                FlipioApp.logger.info("switchToNextInputSource: CGEvent path via hotkey ID \(id) — keyCode=\(params.keyCode) modifiers=0x\(String(params.modifiers, radix: 16))")
+                Self.postKeyEvent(keyCode: CGKeyCode(params.keyCode), carbonModifiers: params.modifiers)
+                return
+            }
+        }
+        FlipioApp.logger.warning("switchToNext: no enabled hotkey found for IDs \(Self.hotkeyIDs) — falling back to direct TISSelectInputSource (no HUD)")
+        switchToNextViaTIS()
+    }
+
+    // MARK: CGEvent path
+
+    private static func postKeyEvent(keyCode: CGKeyCode, carbonModifiers: Int) {
+        let flags = carbonModifiersToCGEventFlags(carbonModifiers)
+        let src = CGEventSource(stateID: .hidSystemState)
+        guard
+            let down = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: true),
+            let up   = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: false)
+        else {
+            FlipioApp.logger.error("switchToNext: failed to create CGEvent for keyCode=\(keyCode)")
             return
         }
-        let source = first as! TISInputSource
-        let result = TISSelectInputSource(source)
-        
-        if result == noErr {
-            let name = getStringProperty(source, key: kTISPropertyLocalizedName) ?? id
-            FlipioApp.logger.info("Switched to input source '\(name, privacy: .public)' (\(id, privacy: .public))")
+        down.flags = flags
+        up.flags   = flags
+        down.post(tap: .cgSessionEventTap)
+        up.post(tap: .cgSessionEventTap)
+        FlipioApp.logger.debug("switchToNext: posted keyDown+keyUp keyCode=\(keyCode) flags=\(flags.rawValue)")
+    }
+
+    /// Converts Carbon-style modifier mask (as stored in com.apple.symbolichotkeys) to CGEventFlags.
+    private static func carbonModifiersToCGEventFlags(_ carbonMods: Int) -> CGEventFlags {
+        var flags: CGEventFlags = []
+        if carbonMods & 0x02_0000 != 0 { flags.insert(.maskShift) }
+        if carbonMods & 0x04_0000 != 0 { flags.insert(.maskControl) }
+        if carbonMods & 0x08_0000 != 0 { flags.insert(.maskAlternate) }
+        if carbonMods & 0x10_0000 != 0 { flags.insert(.maskCommand) }
+        return flags
+    }
+
+    private struct HotkeyParams { let keyCode: Int; let modifiers: Int }
+
+    /// Reads the configured shortcut for a symbolic hotkey ID from
+    /// com.apple.symbolichotkeys preferences (via cfprefsd).
+    /// Requires the `com.apple.security.temporary-exception.shared-preference.read-only`
+    /// sandbox entitlement for `com.apple.symbolichotkeys`.
+    private static func readSystemHotkey(id: Int) -> HotkeyParams? {
+        guard let raw = CFPreferencesCopyAppValue(
+            "AppleSymbolicHotKeys" as CFString,
+            "com.apple.symbolichotkeys" as CFString
+        ) as? [String: Any] else {
+            FlipioApp.logger.warning("readSystemHotkey(\(id)): could not read com.apple.symbolichotkeys (sandbox may block cross-app prefs)")
+            return nil
+        }
+        guard let entry = raw[String(id)] as? [String: Any] else {
+            let enabledIDs = raw.compactMap { k, v -> String? in
+                guard let d = v as? [String: Any], (d["enabled"] as? Bool) == true else { return nil }
+                return k
+            }.sorted { (Int($0) ?? 0) < (Int($1) ?? 0) }
+            FlipioApp.logger.warning("readSystemHotkey(\(id)): ID \(id) not present — enabled hotkey IDs in prefs: \(enabledIDs)")
+            return nil
+        }
+        guard let enabled = entry["enabled"] as? Bool, enabled else {
+            FlipioApp.logger.info("readSystemHotkey(\(id)): hotkey \(id) exists but is disabled — entry: \(entry)")
+            return nil
+        }
+        guard
+            let value      = entry["value"] as? [String: Any],
+            let parameters = value["parameters"] as? [Any],
+            parameters.count >= 3,
+            let keyCode    = parameters[1] as? Int,
+            let modifiers  = parameters[2] as? Int
+        else {
+            FlipioApp.logger.warning("readSystemHotkey(\(id)): unexpected parameters structure: \(entry)")
+            return nil
+        }
+        FlipioApp.logger.debug("readSystemHotkey(\(id)): found keyCode=\(keyCode) modifiers=0x\(String(modifiers, radix: 16))")
+        return HotkeyParams(keyCode: keyCode, modifiers: modifiers)
+    }
+
+    // MARK: TIS fallback path
+
+    private func switchToNextViaTIS() {
+        let inputSourceList = allSources().filter { isSelectable($0) }
+        FlipioApp.logger.debug("switchToNextViaTIS: \(inputSourceList.count) selectable sources found")
+        guard !inputSourceList.isEmpty else {
+            FlipioApp.logger.warning("switchToNextViaTIS: no selectable input sources")
+            return
+        }
+
+        let nextIndex: Int
+        if let last = Self.lastSelectedIndex {
+            nextIndex = (last + 1) % inputSourceList.count
+            FlipioApp.logger.debug("switchToNextViaTIS: advancing from cached index \(last) → \(nextIndex)")
         } else {
-            FlipioApp.logger.error("Failed to activate input source '\(id, privacy: .public)' (error: \(result))")
+            if let currentSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
+               let currentIndex = inputSourceList.firstIndex(where: { $0 == currentSource }) {
+                nextIndex = (currentIndex + 1) % inputSourceList.count
+                FlipioApp.logger.debug("switchToNextViaTIS: first call, current index \(currentIndex) → \(nextIndex)")
+            } else {
+                nextIndex = 0
+                FlipioApp.logger.debug("switchToNextViaTIS: first call, current source not in list, defaulting to index 0")
+            }
         }
+        let result = TISSelectInputSource(inputSourceList[nextIndex])
+        if result == noErr {
+            FlipioApp.logger.info("switchToNextViaTIS: switched to index \(nextIndex) (OSStatus=\(result))")
+        } else {
+            FlipioApp.logger.error("switchToNextViaTIS: TISSelectInputSource failed OSStatus=\(result))")
+        }
+        Self.lastSelectedIndex = nextIndex
+    }
+
+    private func isSelectable(_ source: TISInputSource) -> Bool {
+        guard let value = TISGetInputSourceProperty(source, kTISPropertyInputSourceIsSelectCapable) else {
+            return false
+        }
+        return Unmanaged<CFBoolean>.fromOpaque(value).takeUnretainedValue() == kCFBooleanTrue
     }
 
     private func hasUnicodeKeyLayout(_ source: TISInputSource) -> Bool {
         return TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) != nil
     }
 
+    private func allSources() -> [TISInputSource] {
+        guard let list = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] else {
+            return []
+        }
+        return list
+    }
+
+    private func makeSourceInfo(from source: TISInputSource) -> KeyboardInputSourceInfo? {
+        guard isSelectable(source), hasUnicodeKeyLayout(source) else { return nil }
+
+        let id = getStringProperty(source, key: kTISPropertyInputSourceID) ?? "unknown"
+        let name = getStringProperty(source, key: kTISPropertyLocalizedName) ?? id
+        let primaryLanguage = getPrimaryLanguageProperty(source, key: kTISPropertyInputSourceLanguages)
+
+        return KeyboardInputSourceInfo(id: id, name: name, primaryLanguage: primaryLanguage, source: source)
+    }
+
+    private func source(withID targetID: String) -> TISInputSource? {
+        allSources().first { getStringProperty($0, key: kTISPropertyInputSourceID) == targetID }
+    }
+
+    private func firstDistinctPair(in sources: [KeyboardInputSourceInfo]) -> (primary: KeyboardInputSourceInfo, secondary: KeyboardInputSourceInfo)? {
+        guard let primary = sources.first,
+              let secondary = sources.first(where: { $0.id != primary.id }) else {
+            return nil
+        }
+        return (primary: primary, secondary: secondary)
+    }
+
+    private func nextSource(
+        after currentID: String?,
+        in sources: [KeyboardInputSourceInfo]
+    ) -> KeyboardInputSourceInfo? {
+        guard !sources.isEmpty else { return nil }
+        guard let currentID,
+              let currentIndex = sources.firstIndex(where: { $0.id == currentID }) else {
+            return sources.first
+        }
+
+        let nextIndex = (currentIndex + 1) % sources.count
+        return sources[nextIndex]
+    }
+
+    private func matchesLanguageCode(_ languageCode: String, source: KeyboardInputSourceInfo) -> Bool {
+        guard !source.primaryLanguage.isEmpty else {
+            return false
+        }
+        return source.primaryLanguage.caseInsensitiveCompare(languageCode) == .orderedSame
+    }
+
+    private func preferredLanguageCode(from identifier: String) -> String {
+        let locale = Locale(identifier: identifier)
+        if let languageCode = locale.language.languageCode?.identifier {
+            return languageCode
+        }
+
+        return identifier.split(whereSeparator: { $0 == "-" || $0 == "_" }).first.map(String.init) ?? identifier
+    }
+
     private func getStringProperty(_ source: TISInputSource, key: CFString) -> String? {
         guard let raw = TISGetInputSourceProperty(source, key) else { return nil }
         let value = Unmanaged<CFString>.fromOpaque(raw).takeUnretainedValue()
         return value as String
+    }
+
+    private func getPrimaryLanguageProperty(_ source: TISInputSource, key: CFString) -> String {
+        guard let raw = TISGetInputSourceProperty(source, key) else { return "" }
+        let value = Unmanaged<CFArray>.fromOpaque(raw).takeUnretainedValue()
+        let languages = value as? [String] ?? []
+        return languages.first ?? ""
     }
 }
 
@@ -159,11 +312,11 @@ enum KeyboardLayoutPairBuilder {
         from primary: KeyboardInputSourceInfo,
         and secondary: KeyboardInputSourceInfo
     ) -> KeyboardLayoutSelection {
-        let mapping = buildMapping(from: primary.source, to: secondary.source)
+        let mapping = buildMapping(from: primary, to: secondary)
         let pair = KeyboardLayoutPair(
             id: "\(primary.id)-\(secondary.id)",
-            nameA: primary.name,
-            nameB: secondary.name,
+            nameA: primary,
+            nameB: secondary,
             aToB: mapping.aToB,
             bToA: mapping.bToA
         )
@@ -175,8 +328,8 @@ enum KeyboardLayoutPairBuilder {
     }
 
     private static func buildMapping(
-        from sourceA: TISInputSource,
-        to sourceB: TISInputSource
+        from sourceA: KeyboardInputSourceInfo,
+        to sourceB: KeyboardInputSourceInfo
     ) -> (aToB: [Character: Character], bToA: [Character: Character]) {
         var aToB: [Character: Character] = [:]
         var bToA: [Character: Character] = [:]
@@ -199,8 +352,8 @@ enum KeyboardLayoutPairBuilder {
     
     /// Builds a one-way character mapping from source A to source B.
     static func buildOneWayMapping(
-        from sourceA: TISInputSource,
-        to sourceB: TISInputSource
+        from sourceA: KeyboardInputSourceInfo,
+        to sourceB: KeyboardInputSourceInfo
     ) -> [Character: Character] {
         let mapping = buildMapping(from: sourceA, to: sourceB)
         return mapping.aToB
@@ -209,9 +362,9 @@ enum KeyboardLayoutPairBuilder {
     private static func translateCharacter(
         keyCode: UInt16,
         modifiers: UInt32,
-        source: TISInputSource
+        source: KeyboardInputSourceInfo
     ) -> Character? {
-        guard let layoutData = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) else {
+        guard let layoutData = TISGetInputSourceProperty(source.source, kTISPropertyUnicodeKeyLayoutData) else {
             return nil
         }
 

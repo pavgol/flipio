@@ -34,7 +34,7 @@ class AccessibilityPermissionManager: ObservableObject {
         checkCount += 1
         
         let status = trusted ? "GRANTED" : "DENIED"
-        FlipioApp.logger.debug("Check #\(self.checkCount, privacy: .public): Accessibility permission = \(status, privacy: .public)")
+//        FlipioApp.logger.debug("Check #\(self.checkCount, privacy: .public): Accessibility permission = \(status, privacy: .public)")
         
         isAccessibilityGranted = trusted
         

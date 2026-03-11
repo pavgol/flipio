@@ -44,13 +44,8 @@ final class TextConversionService: @unchecked Sendable {
                 "Attempting typed-word conversion for \(word, privacy: .private(mask: .hash))"
             )
             
-            let success = replaceTypedWordWithNextLayout(original: word)
-            if success {
-                // Update buffer with converted text for next conversion
-                if let converted = converter.convertToNextLayout(word) {
-                    typedWordBuffer.set(converted.text)
-                }
-            }
+            let _ = replaceTypedWordWithNextLayout(original: word)
+            
         }
         // selection text conversion
         else {
@@ -132,35 +127,8 @@ final class TextConversionService: @unchecked Sendable {
             FlipioApp.logger.error("convertAndReplace: failed to synthesize Cmd+V")
             return false
         }
-        converter.applyTargetLayout(conversion)
+        converter.applyTargetLayout(conversion.targetLayout)
         return true
-    }
-    
-    /// Converts the given `word` (recently typed buffer) using `LayoutConverter`,
-    /// deletes it from the target app using backspaces, and inserts the converted
-    /// word via paste. The user's clipboard contents are preserved.
-    @discardableResult
-    func convertTypedWord(_ word: String) -> Bool {
-        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            FlipioApp.logger.debug("convertTypedWord: empty or whitespace-only buffer")
-            return false
-        }
-        
-        guard let conversion = converter.convertWithTarget(trimmed) else {
-            FlipioApp.logger.warning("convertTypedWord: no keyboard layouts available")
-            return false
-        }
-        let converted = conversion.text
-        if converted == trimmed {
-            FlipioApp.logger.debug("convertTypedWord: no change")
-            return false
-        }
-        
-        FlipioApp.logger.notice(
-            "conversion: \(trimmed, privacy: .private(mask: .hash)) → \(converted, privacy: .private(mask: .hash)) (\("typed-word", privacy: .public))"
-        )
-        return replaceTypedWord(original: trimmed)
     }
     
     /// Core primitive for typed-word scenarios: deletes `original` using
@@ -183,7 +151,7 @@ final class TextConversionService: @unchecked Sendable {
         // Type the replacement text character by character
         simulateTyping(replacement)
 
-        converter.applyTargetLayout(conversion)
+        converter.applyTargetLayout(conversion.targetLayout)
         
         FlipioApp.logger.debug(
             "replaceTypedWord: completed via delete+typing"
@@ -211,7 +179,8 @@ final class TextConversionService: @unchecked Sendable {
         // Type the replacement text character by character
         simulateTyping(replacement)
 
-        converter.applyNextLayout(conversion)
+        converter.applyTargetLayout(conversion.targetLayout)
+        typedWordBuffer.set(conversion.text)
         
         FlipioApp.logger.debug(
             "replaceTypedWordWithNextLayout: completed via delete+typing"
