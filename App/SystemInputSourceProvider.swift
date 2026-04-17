@@ -82,10 +82,10 @@ struct SystemInputSourceProvider {
     /// up to `selectableSources().count` times until the desired source becomes current.
     /// Falls back to direct TISSelectInputSource if the hotkey never reaches the target.
     func activateInputSource(id target: KeyboardInputSourceInfo) {
-        FlipioApp.logger.debug("activateInputSource: activating '\(target.id)'")
+        FlipioApp.logger.debug("activateInputSource: activating '\(target.id, privacy: .public)'")
         // No-op if already current.
         if currentSourceID() == target.id {
-            FlipioApp.logger.debug("activateInputSource: '\(target.id)' is already active")
+            FlipioApp.logger.debug("activateInputSource: '\(target.id, privacy: .public)' is already active")
             return
         }
         //TODO: now two system layouts are supported only.
@@ -112,7 +112,7 @@ struct SystemInputSourceProvider {
         for id in Self.hotkeyIDs {
             if let params = Self.readSystemHotkey(id: id) {
                 FlipioApp.logger.info(
-                    "switchToNextInputSource: CGEvent path via hotkey ID \(id) — keyCode=\(params.keyCode) modifiers=0x\(String(params.modifiers, radix: 16))"
+                    "switchToNextInputSource: CGEvent path via hotkey ID \(id, privacy: .public) — keyCode=\(params.keyCode, privacy: .public) modifiers=0x\(String(params.modifiers, radix: 16), privacy: .public)"
                 )
                 KeySimulator.postKeyPress(
                     keyCode: CGKeyCode(params.keyCode),
@@ -122,7 +122,7 @@ struct SystemInputSourceProvider {
             }
         }
         FlipioApp.logger.warning(
-            "switchToNext: no enabled hotkey found for IDs \(Self.hotkeyIDs) — falling back to direct TISSelectInputSource (no HUD)"
+            "switchToNext: no enabled hotkey found for IDs \(Self.hotkeyIDs, privacy: .public) — falling back to direct TISSelectInputSource (no HUD)"
         )
         switchToNextViaTIS()
     }
@@ -154,7 +154,7 @@ struct SystemInputSourceProvider {
             ) as? [String: Any]
         else {
             FlipioApp.logger.warning(
-                "readSystemHotkey(\(id)): could not read com.apple.symbolichotkeys (sandbox may block cross-app prefs)"
+                "readSystemHotkey(\(id, privacy: .public)): could not read com.apple.symbolichotkeys (sandbox may block cross-app prefs)"
             )
             return nil
         }
@@ -166,13 +166,13 @@ struct SystemInputSourceProvider {
                 return k
             }.sorted { (Int($0) ?? 0) < (Int($1) ?? 0) }
             FlipioApp.logger.warning(
-                "readSystemHotkey(\(id)): ID \(id) not present — enabled hotkey IDs in prefs: \(enabledIDs)"
+                "readSystemHotkey(\(id, privacy: .public)): ID \(id, privacy: .public) not present — enabled hotkey IDs in prefs: \(enabledIDs, privacy: .public)"
             )
             return nil
         }
         guard let enabled = entry["enabled"] as? Bool, enabled else {
             FlipioApp.logger.info(
-                "readSystemHotkey(\(id)): hotkey \(id) exists but is disabled — entry: \(entry)")
+                "readSystemHotkey(\(id, privacy: .public)): hotkey \(id, privacy: .public) exists but is disabled — entry: \(entry, privacy: .public)")
             return nil
         }
         guard
@@ -183,11 +183,11 @@ struct SystemInputSourceProvider {
             let modifiers = parameters[2] as? Int
         else {
             FlipioApp.logger.warning(
-                "readSystemHotkey(\(id)): unexpected parameters structure: \(entry)")
+                "readSystemHotkey(\(id, privacy: .public)): unexpected parameters structure: \(entry, privacy: .public)")
             return nil
         }
         FlipioApp.logger.debug(
-            "readSystemHotkey(\(id)): found keyCode=\(keyCode) modifiers=0x\(String(modifiers, radix: 16))"
+            "readSystemHotkey(\(id, privacy: .public)): found keyCode=\(keyCode, privacy: .public) modifiers=0x\(String(modifiers, radix: 16), privacy: .public)"
         )
         return HotkeyParams(keyCode: keyCode, modifiers: modifiers)
     }
@@ -197,7 +197,7 @@ struct SystemInputSourceProvider {
     private func switchToNextViaTIS() {
         let inputSourceList = allSources().filter { isSelectable($0) }
         FlipioApp.logger.debug(
-            "switchToNextViaTIS: \(inputSourceList.count) selectable sources found")
+            "switchToNextViaTIS: \(inputSourceList.count, privacy: .public) selectable sources found")
         guard !inputSourceList.isEmpty else {
             FlipioApp.logger.warning("switchToNextViaTIS: no selectable input sources")
             return
@@ -207,14 +207,14 @@ struct SystemInputSourceProvider {
         if let last = Self.lastSelectedIndex {
             nextIndex = (last + 1) % inputSourceList.count
             FlipioApp.logger.debug(
-                "switchToNextViaTIS: advancing from cached index \(last) → \(nextIndex)")
+                "switchToNextViaTIS: advancing from cached index \(last, privacy: .public) → \(nextIndex, privacy: .public)")
         } else {
             if let currentSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
                 let currentIndex = inputSourceList.firstIndex(where: { $0 == currentSource })
             {
                 nextIndex = (currentIndex + 1) % inputSourceList.count
                 FlipioApp.logger.debug(
-                    "switchToNextViaTIS: first call, current index \(currentIndex) → \(nextIndex)")
+                    "switchToNextViaTIS: first call, current index \(currentIndex, privacy: .public) → \(nextIndex, privacy: .public)")
             } else {
                 nextIndex = 0
                 FlipioApp.logger.debug(
@@ -225,10 +225,10 @@ struct SystemInputSourceProvider {
         let result = TISSelectInputSource(inputSourceList[nextIndex])
         if result == noErr {
             FlipioApp.logger.info(
-                "switchToNextViaTIS: switched to index \(nextIndex) (OSStatus=\(result))")
+                "switchToNextViaTIS: switched to index \(nextIndex, privacy: .public) (OSStatus=\(result, privacy: .public))")
         } else {
             FlipioApp.logger.error(
-                "switchToNextViaTIS: TISSelectInputSource failed OSStatus=\(result))")
+                "switchToNextViaTIS: TISSelectInputSource failed OSStatus=\(result, privacy: .public))")
         }
         Self.lastSelectedIndex = nextIndex
     }

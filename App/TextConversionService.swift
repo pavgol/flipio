@@ -41,7 +41,7 @@ final class TextConversionService: @unchecked Sendable {
         if let word = typedWordBuffer.getBuffer(), !word.isEmpty {
             // New typed word case: convert it in-place using cycle through all layouts.
             FlipioApp.logger.info(
-                "Attempting typed-word conversion for \(word, privacy: .private(mask: .hash))"
+                "Attempting typed-word conversion for \(word, privacy: .public)"
             )
             
             let _ = replaceTypedWordWithNextLayout(original: word)
@@ -103,7 +103,7 @@ final class TextConversionService: @unchecked Sendable {
             return false
         }else{
             FlipioApp.logger.debug(
-                "convertAndReplace: textBeforeCopy `\(textBeforeCopy ?? "", privacy: .private(mask: .hash))`, originalText `\(originalText, privacy: .private(mask: .hash))`")
+                "convertAndReplace: textBeforeCopy `\(textBeforeCopy ?? "", privacy: .public)`, originalText `\(originalText, privacy: .public)`")
         }
         
         guard let conversion = converter.convertWithTarget(originalText) else {
@@ -113,14 +113,14 @@ final class TextConversionService: @unchecked Sendable {
         let converted = conversion.text
         
         FlipioApp.logger.notice(
-            "conversion: \(originalText, privacy: .private(mask: .hash)) → \(converted, privacy: .private(mask: .hash)) (\("clipboard", privacy: .public))"
+            "conversion: \(originalText, privacy: .public) → \(converted, privacy: .public) (clipboard)"
         )
         
         pasteboard.clearContents()
         pasteboard.setString(converted, forType: .string)
         
         let originalText2 = pasteboard.string(forType: .string)
-        FlipioApp.logger.debug("convertAndReplace: clipboard has `\(originalText2 ?? "nil", privacy: .private(mask: .hash))`")
+        FlipioApp.logger.debug("convertAndReplace: clipboard has `\(originalText2 ?? "nil", privacy: .public)`")
         
         Thread.sleep(forTimeInterval: Self.clipboardOperationDelay)
         guard simulatePaste() else {
@@ -142,7 +142,7 @@ final class TextConversionService: @unchecked Sendable {
         let replacement = conversion.text
         
         FlipioApp.logger.notice(
-            "replaceTypedWordWithNextLayout: \(original, privacy: .private(mask: .hash)) → \(replacement, privacy: .private(mask: .hash))"
+            "replaceTypedWordWithNextLayout: \(original, privacy: .public) → \(replacement, privacy: .public)"
         )
         
         // Delete the original text using app-appropriate strategy
@@ -184,7 +184,7 @@ final class TextConversionService: @unchecked Sendable {
             snapshot.append(typeData)
         }
         
-        FlipioApp.logger.debug("snapshotPasteboard: captured \(snapshot.count) items")
+        FlipioApp.logger.debug("snapshotPasteboard: captured \(snapshot.count, privacy: .public) items")
         return snapshot
     }
     
@@ -214,7 +214,7 @@ final class TextConversionService: @unchecked Sendable {
         Thread.sleep(forTimeInterval: Self.clipboardOperationDelay)
         
         FlipioApp.logger.debug(
-            "restorePasteboard: restored \(itemsToWrite.count) items (success=\(wrote))")
+            "restorePasteboard: restored \(itemsToWrite.count, privacy: .public) items (success=\(wrote, privacy: .public))")
     }
     
     // MARK: - Synthetic key events

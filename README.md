@@ -38,6 +38,13 @@ A macOS menu bar app that instantly converts text between keyboard layouts. Perf
 
 4. Grant Accessibility permissions when prompted
 
+## Troubleshooting
+Watch OS events using
+
+```bash
+log stream --predicate 'subsystem == "com.flipio.app"' --level debug --style compact
+```
+
 ## Privacy
 
 Flipio requires Accessibility permissions to:

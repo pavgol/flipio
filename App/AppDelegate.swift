@@ -31,10 +31,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             let permissionManager = AccessibilityPermissionManager.shared
             if !permissionManager.isAccessibilityGranted {
-                FlipioApp.logger.info("Accessibility permissions not granted - opening Settings automatically")
                 openPrefs()
-            } else {
-                FlipioApp.logger.info("Accessibility permissions already granted")
             }
         }
     }
