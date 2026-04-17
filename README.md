@@ -16,10 +16,19 @@ A macOS menu bar app that instantly converts text between keyboard layouts. Perf
 
 ## Requirements
 
-- macOS 11.0 or later
-- Xcode 14.0+ (for building)
+- macOS 14.0 (Sonoma) or later
+- Xcode 15.0+ (for building from source)
 
 ## Installation
+
+### Homebrew (recommended)
+
+```bash
+brew tap pavel-golub/flipio
+brew install --cask flipio
+```
+
+Flipio is ad-hoc signed (the author is not enrolled in the Apple Developer Program). The cask removes macOS's quarantine attribute after install so the app can launch without Gatekeeper warnings. Review the source before installing if that concerns you.
 
 ### From Source
 
