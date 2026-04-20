@@ -2,9 +2,9 @@
 
 All notable changes to Flipio are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project uses [semantic versioning](https://semver.org/).
 
-## [0.1.0] - Unreleased
+## [0.1.0-beta] - 2026-04-20
 
-First public release. Distributed via Homebrew cask (`pggolub/flipio` tap).
+First public beta. Distributed via Homebrew cask (`pggolub/flipio` tap).
 
 ### Added
 - Menu bar app that converts selected text or the last typed word between keyboard layouts on Option-tap.
