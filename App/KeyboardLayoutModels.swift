@@ -1,17 +1,8 @@
 //
-//  KeyboardLayoutModels.swift
-//  Flipio
-//
 //  Core models for keyboard layout conversion.
 //
 
 import Foundation
-
-/// Indicates which side of the layout pair text was converted to.
-enum KeyboardLayoutSide {
-    case layoutA
-    case layoutB
-}
 
 /// A pair of keyboard layouts with bidirectional character mapping.
 struct KeyboardLayoutPair: Sendable {

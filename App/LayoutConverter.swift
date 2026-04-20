@@ -1,7 +1,4 @@
 //
-//  LayoutConverter.swift
-//  Flipio
-//
 //  Converts text between keyboard layouts.
 //
 

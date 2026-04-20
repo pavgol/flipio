@@ -1,7 +1,4 @@
 //
-//  EventMonitor.swift
-//  Flipio
-//
 //  Monitors keyboard and mouse events globally to detect Option key taps
 //  and track typed words for layout conversion using CGEventSupervisor.
 //

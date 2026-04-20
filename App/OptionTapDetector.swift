@@ -1,7 +1,4 @@
 //
-//  OptionTapDetector.swift
-//  Flipio
-//
 //  Pure state machine for detecting a single Option key "tap":
 //  press and release within a timeout, with no other key pressed in between.
 //

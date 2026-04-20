@@ -1,7 +1,4 @@
 //
-//  SystemInputSourceProvider.swift
-//  Flipio
-//
 //  System input source detection, keyboard layout pair building,
 //  and input source switching (with system HUD support).
 //
