@@ -13,7 +13,7 @@ Modern open source Punto Switcher alternative for macOS.
 [![macOS](https://img.shields.io/badge/macOS-14.0%2B-000000?logo=apple&logoColor=white)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/Swift-5.9-F05138?logo=swift&logoColor=white)](https://swift.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Homebrew](https://img.shields.io/badge/Homebrew-tap-FBB040?logo=homebrew&logoColor=white)](https://github.com/pavgol/homebrew-flipio)
+[![Homebrew](https://img.shields.io/badge/Homebrew-tap-FBB040?logo=homebrew&logoColor=white)](https://github.com/pggolub/homebrew-flipio)
 
 </div>
 
@@ -36,7 +36,7 @@ Modern open source Punto Switcher alternative for macOS.
 ### Homebrew (recommended)
 
 ```bash
-brew tap pavgol/flipio
+brew tap pggolub/flipio
 brew install --cask flipio
 ```
 
@@ -44,7 +44,7 @@ brew install --cask flipio
 
 ### Direct download (DMG)
 
-Grab the latest `.dmg` from the [Releases page](https://github.com/pavgol/flipio/releases/latest), open it, and drag Flipio into `/Applications`.
+Grab the latest `.dmg` from the [Releases page](https://github.com/pggolub/flipio/releases/latest), open it, and drag Flipio into `/Applications`.
 
 Because the build is ad-hoc signed, macOS Gatekeeper will block it on first launch. Either right-click the app and choose **Open**, or strip the quarantine attribute manually:
 
@@ -56,7 +56,7 @@ xattr -dr com.apple.quarantine /Applications/Flipio.app
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/pavgol/flipio.git
+   git clone https://github.com/pggolub/flipio.git
    cd flipio
    ```
 
@@ -97,4 +97,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 💬 Support
 
-If you encounter any issues or have feature requests, please [open an issue](https://github.com/pavgol/flipio/issues) on GitHub.
+If you encounter any issues or have feature requests, please [open an issue](https://github.com/pggolub/flipio/issues) on GitHub.

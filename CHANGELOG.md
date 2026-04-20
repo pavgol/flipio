@@ -4,7 +4,7 @@ All notable changes to Flipio are documented here. Format loosely follows [Keep 
 
 ## [0.1.0] - Unreleased
 
-First public release. Distributed via Homebrew cask (`pavgol/flipio` tap).
+First public release. Distributed via Homebrew cask (`pggolub/flipio` tap).
 
 ### Added
 - Menu bar app that converts selected text or the last typed word between keyboard layouts on Option-tap.
