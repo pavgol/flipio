@@ -15,6 +15,8 @@ Modern open source Punto Switcher alternative for macOS.
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Homebrew](https://img.shields.io/badge/Homebrew-tap-FBB040?logo=homebrew&logoColor=white)](https://github.com/pggolub/homebrew-flipio)
 
+<img src="demo.gif" alt="Flipio demo" width="60%" />
+
 </div>
 
 ---
